@@ -13,3 +13,4 @@ exclude =
     *_init.py,
     # Source control directories have nothing of interest
     .hgignore
+ignore = E402

@@ -1,3 +1,7 @@
+from gi import require_version
+
+require_version("GnomeKeyring", "1.0")
+
 from gi.repository import Gio
 from gi.repository import GLib
 from gi.repository import GnomeKeyring
