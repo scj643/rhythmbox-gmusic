@@ -1,3 +1,5 @@
+import sys
+
 from setuptools import find_packages
 from setuptools import setup
 
@@ -16,7 +18,13 @@ setup(
     zip_safe=False,
     install_requires=["gmusicapi", "futures"],
     data_files=[
-        ("lib/rhythmbox/plugins/googleplaymusic", ["googleplaymusic.plugin"]),
-        ("share/locale/ru/LC_MESSAGES/", ["po/ru/rhythmbox-gmusic.po"]),
+        (
+            f"{sys.prefix}/share/rhythmbox/plugins/googleplaymusic",
+            ["googleplaymusic.plugin"],
+        ),
+        (
+            f"{sys.prefix}/share/locale/ru/LC_MESSAGES/",
+            ["po/ru/rhythmbox-gmusic.po"],
+        ),
     ],
 )
