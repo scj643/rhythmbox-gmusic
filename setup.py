@@ -16,10 +16,7 @@ setup(
     zip_safe=False,
     install_requires=["gmusicapi", "futures"],
     data_files=[
-        (
-            "/usr/lib/rhythmbox/plugins/googleplaymusic",
-            ["googleplaymusic.plugin"],
-        ),
-        ("/usr/share/locale/ru/LC_MESSAGES/", ["po/ru/rhythmbox-gmusic.po"]),
+        ("lib/rhythmbox/plugins/googleplaymusic", ["googleplaymusic.plugin"]),
+        ("share/locale/ru/LC_MESSAGES/", ["po/ru/rhythmbox-gmusic.po"]),
     ],
 )
