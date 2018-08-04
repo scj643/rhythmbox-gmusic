@@ -1,4 +1,9 @@
-from gi.repository import GdkPixbuf, Gio, GLib, GnomeKeyring, Gtk, GObject, Peas
+from gi.repository import Gio
+from gi.repository import GLib
+from gi.repository import GnomeKeyring
+from gi.repository import GObject
+from gi.repository import Gtk
+from gi.repository import Peas
 from gi.repository import RB
 
 from concurrent import futures
@@ -10,49 +15,54 @@ import json
 gettext.bindtextdomain("rhythmbox-gmusic", "/usr/share/locale")
 gettext.textdomain("rhythmbox-gmusic")
 
-mapi = Mapi(False)
-
-executor = futures.ThreadPoolExecutor(max_workers=1)
-
-APP_KEY = 'rhythmbox-gmusic'
+APP_KEY = "rhythmbox-gmusic"
 result, KEYRING = GnomeKeyring.get_default_keyring_sync()
-
 GnomeKeyring.unlock_sync(KEYRING, None)
+
+mapi = Mapi(False)
+executor = futures.ThreadPoolExecutor(max_workers=1)
 
 
 def get_playlist_songs(id):
     try:
-        #Mobile API can't get a single playlist's contents
+        # Mobile API can't get a single playlist's contents
         playlists = mapi.get_all_user_playlist_contents()
         for playlist in playlists:
-            if playlist['id'] == id:
-                return playlist['tracks']
+            if playlist["id"] == id:
+                return playlist["tracks"]
     except KeyError:
         return []
 
+
 def get_credentials():
     attrs = GnomeKeyring.Attribute.list_new()
-    GnomeKeyring.Attribute.list_append_string(attrs, 'id', APP_KEY)
-    result, value = GnomeKeyring.find_items_sync(GnomeKeyring.ItemType.GENERIC_SECRET, attrs)
+    GnomeKeyring.Attribute.list_append_string(attrs, "id", APP_KEY)
+    result, value = GnomeKeyring.find_items_sync(
+        GnomeKeyring.ItemType.GENERIC_SECRET, attrs
+    )
     if result == GnomeKeyring.Result.OK:
         return json.loads(value[0].secret)
     else:
-        return '', ''
+        return "", ""
 
 
 def set_credentials(username, password):
     if KEYRING is not None:
         GnomeKeyring.create_sync(KEYRING, None)
     attrs = GnomeKeyring.Attribute.list_new()
-    GnomeKeyring.Attribute.list_append_string(attrs, 'id', APP_KEY)
+    GnomeKeyring.Attribute.list_append_string(attrs, "id", APP_KEY)
     GnomeKeyring.item_create_sync(
-        KEYRING, GnomeKeyring.ItemType.GENERIC_SECRET, APP_KEY,
-        attrs, json.dumps([username, password]), True,
+        KEYRING,
+        GnomeKeyring.ItemType.GENERIC_SECRET,
+        APP_KEY,
+        attrs,
+        json.dumps([username, password]),
+        True,
     )
 
 
 class GooglePlayMusic(GObject.Object, Peas.Activatable):
-    __gtype_name = 'GooglePlayMusicPlugin'
+    __gtype_name = "GooglePlayMusicPlugin"
     object = GObject.property(type=GObject.GObject)
 
     def __init__(self):
@@ -63,7 +73,8 @@ class GooglePlayMusic(GObject.Object, Peas.Activatable):
         db = shell.props.db
         model = RB.RhythmDBQueryModel.new_empty(db)
         self.source = GObject.new(
-            GooglePlayLibrary, shell=shell,
+            GooglePlayLibrary,
+            shell=shell,
             name="Google Play Music",
             query_model=model,
             plugin=self,
@@ -83,22 +94,31 @@ class GEntry(RB.RhythmDBEntryType):
         RB.RhythmDBEntryType.__init__(self)
 
     def do_get_playback_uri(self, entry):
-        id = entry.dup_string(RB.RhythmDBPropType.LOCATION).split('/')[1]
+        id = entry.dup_string(RB.RhythmDBPropType.LOCATION).split("/")[1]
         return mapi.get_stream_url(id)
 
     def do_can_sync_metadata(self, entry):
         return True
+
+
 gentry = GEntry()
 
 
 class AuthDialog(Gtk.Dialog):
     def __init__(self):
-        Gtk.Dialog.__init__(self,
-            _('Your Google account credentials'), None, 0, (
-                Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_OK, Gtk.ResponseType.OK,
-        ))
-        top_label = Gtk.Label(_('Please enter your Google account credentials'))
+        Gtk.Dialog.__init__(
+            self,
+            _("Your Google account credentials"),
+            None,
+            0,
+            (
+                Gtk.STOCK_CANCEL,
+                Gtk.ResponseType.CANCEL,
+                Gtk.STOCK_OK,
+                Gtk.ResponseType.OK,
+            ),
+        )
+        top_label = Gtk.Label(_("Please enter your Google account credentials"))
         login_label = Gtk.Label(_("Login:"))
         self.login_input = Gtk.Entry()
         login_box = Gtk.HBox()
@@ -128,26 +148,20 @@ class GooglePlayBaseSource(RB.Source):
             is_drag_source=True,
             is_drag_dest=False,
         )
-        self.songs_view.append_column(
-            RB.EntryViewColumn.TRACK_NUMBER, True,
-        )
-        self.songs_view.append_column(
-            RB.EntryViewColumn.TITLE, True,
-        )
-        self.songs_view.append_column(
-            RB.EntryViewColumn.ARTIST, True,
-        )
-        self.songs_view.append_column(
-            RB.EntryViewColumn.ALBUM, True,
-        )
-        self.songs_view.append_column(
-            RB.EntryViewColumn.DURATION, True,
-        )
-        self.songs_view.connect('notify::sort-order',
+        self.songs_view.append_column(RB.EntryViewColumn.TRACK_NUMBER, True)
+        self.songs_view.append_column(RB.EntryViewColumn.TITLE, True)
+        self.songs_view.append_column(RB.EntryViewColumn.ARTIST, True)
+        self.songs_view.append_column(RB.EntryViewColumn.ALBUM, True)
+        self.songs_view.append_column(RB.EntryViewColumn.DURATION, True)
+        self.songs_view.connect(
+            "notify::sort-order",
             lambda *args, **kwargs: self.songs_view.resort_model(),
         )
-        self.songs_view.connect('entry-activated',
-            lambda view, entry: shell.props.shell_player.play_entry(entry, self),
+        self.songs_view.connect(
+            "entry-activated",
+            lambda view, entry: shell.props.shell_player.play_entry(
+                entry, self
+            ),
         )
         self.vbox = Gtk.Paned.new(Gtk.Orientation.VERTICAL)
         self.top_box = Gtk.VBox()
@@ -158,8 +172,10 @@ class GooglePlayBaseSource(RB.Source):
             self.top_box.pack_start(infobar, True, True, 0)
             infobar.set_message_type(Gtk.MessageType.INFO)
             auth_btn = infobar.add_button(_("Click here to login"), 1)
-            auth_btn.connect('clicked', self.auth)
-            label = Gtk.Label(_("This plugin requires you to authenticate to Google Play"))
+            auth_btn.connect("clicked", self.auth)
+            label = Gtk.Label(
+                _("This plugin requires you to authenticate to Google Play")
+            )
             infobar.get_content_area().add(label)
         self.browser = RB.LibraryBrowser.new(shell.props.db, gentry)
         self.browser.set_model(self.props.base_query_model, False)
@@ -187,12 +203,16 @@ class GooglePlayBaseSource(RB.Source):
         query_model = RB.RhythmDBQueryModel.new_empty(db)
         query = GLib.PtrArray()
         db.query_append_params(
-            query, RB.RhythmDBQueryType.FUZZY_MATCH,
-            RB.RhythmDBPropType.COMMENT, text.lower(),
+            query,
+            RB.RhythmDBQueryType.FUZZY_MATCH,
+            RB.RhythmDBPropType.COMMENT,
+            text.lower(),
         )
         db.query_append_params(
-            query, RB.RhythmDBQueryType.EQUALS,
-            RB.RhythmDBPropType.GENRE, 'google-play-music',  # shit!
+            query,
+            RB.RhythmDBQueryType.EQUALS,
+            RB.RhythmDBPropType.GENRE,
+            "google-play-music",  # shit!
         )
         db.do_full_query_parsed(query_model, query)
         self.browser.set_model(query_model, False)
@@ -203,7 +223,7 @@ class GooglePlayBaseSource(RB.Source):
         self.props.query_model = self.browser.props.output_model
 
     def init_authenticated(self):
-        if hasattr(self, 'auth_box'):
+        if hasattr(self, "auth_box"):
             self.top_box.remove(self.auth_box)
         self.load_songs()
 
@@ -230,53 +250,41 @@ class GooglePlayBaseSource(RB.Source):
     def create_entry_from_track_data(self, src_id, id_key, track):
         shell = self.props.shell
         db = shell.props.db
-        entry = RB.RhythmDBEntry.new(
-            db, gentry, src_id + '/' + track[id_key],
-            )
+        entry = RB.RhythmDBEntry.new(db, gentry, src_id + "/" + track[id_key])
         full_title = []
-        if 'title' in track:
+        if "title" in track:
+            db.entry_set(entry, RB.RhythmDBPropType.TITLE, track["title"])
+            full_title.append(track["title"])
+        if "durationMillis" in track:
             db.entry_set(
-                entry, RB.RhythmDBPropType.TITLE,
-                track['title']
-                )
-            full_title.append(track['title'])
-        if 'durationMillis' in track:
+                entry,
+                RB.RhythmDBPropType.DURATION,
+                int(track["durationMillis"]) / 1000,
+            )
+        if "album" in track:
+            db.entry_set(entry, RB.RhythmDBPropType.ALBUM, track["album"])
+            full_title.append(track["album"])
+        if "artist" in track:
+            db.entry_set(entry, RB.RhythmDBPropType.ARTIST, track["artist"])
+            full_title.append(track["artist"])
+        if "trackNumber" in track:
             db.entry_set(
-                entry, RB.RhythmDBPropType.DURATION,
-                int(track['durationMillis']) / 1000,
-                )
-        if 'album' in track:
+                entry,
+                RB.RhythmDBPropType.TRACK_NUMBER,
+                int(track["trackNumber"]),
+            )
+        if "albumArtRef" in track:
             db.entry_set(
-                entry, RB.RhythmDBPropType.ALBUM,
-                track['album'],
-                )
-            full_title.append(track['album'])
-        if 'artist' in track:
-            db.entry_set(
-                entry, RB.RhythmDBPropType.ARTIST,
-                track['artist'],
-                )
-            full_title.append(track['artist'])
-        if 'trackNumber' in track:
-            db.entry_set(
-                entry, RB.RhythmDBPropType.TRACK_NUMBER,
-                int(track['trackNumber']),
-                )
-        if 'albumArtRef' in track:
-            db.entry_set(
-                entry, RB.RhythmDBPropType.MB_ALBUMID,
-                track['albumArtRef'][0]['url'],
-                )
+                entry,
+                RB.RhythmDBPropType.MB_ALBUMID,
+                track["albumArtRef"][0]["url"],
+            )
         # rhytmbox OR don't work for custom filters
         db.entry_set(
-            entry, RB.RhythmDBPropType.COMMENT,
-            ' - '.join(full_title).lower(),
-            )
+            entry, RB.RhythmDBPropType.COMMENT, " - ".join(full_title).lower()
+        )
         # rhythmbox segfoalt when new db created from python
-        db.entry_set(
-            entry, RB.RhythmDBPropType.GENRE,
-            'google-play-music',
-            )
+        db.entry_set(entry, RB.RhythmDBPropType.GENRE, "google-play-music")
         return entry
 
     def load_songs():
@@ -290,7 +298,8 @@ class GooglePlayLibrary(GooglePlayBaseSource):
         for song in self.trackdata:
             try:
                 entry = self.create_entry_from_track_data(
-                    getattr(self, 'id', 'gmusic'), 'id', song)
+                    getattr(self, "id", "gmusic"), "id", song
+                )
                 self.props.base_query_model.add_entry(entry, -1)
             except TypeError:  # Already in db
                 pass
@@ -304,12 +313,13 @@ class GooglePlayLibrary(GooglePlayBaseSource):
         for playlist in self.playlists:
             model = RB.RhythmDBQueryModel.new_empty(db)
             pl = GObject.new(
-                GooglePlayPlaylist, shell=shell,
-                name=playlist['name'],
+                GooglePlayPlaylist,
+                shell=shell,
+                name=playlist["name"],
                 query_model=model,
-                icon=Gio.ThemedIcon.new("playlist")
-                )
-            pl.setup(playlist['id'], self.trackdata)
+                icon=Gio.ThemedIcon.new("playlist"),
+            )
+            pl.setup(playlist["id"], self.trackdata)
             shell.append_display_page(pl, self)
 
 
@@ -328,12 +338,16 @@ class GooglePlayPlaylist(GooglePlayBaseSource):
         query_model = RB.RhythmDBQueryModel.new_empty(db)
         query = GLib.PtrArray()
         db.query_append_params(
-            query, RB.RhythmDBQueryType.FUZZY_MATCH,
-            RB.RhythmDBPropType.COMMENT, text.lower(),
+            query,
+            RB.RhythmDBQueryType.FUZZY_MATCH,
+            RB.RhythmDBPropType.COMMENT,
+            text.lower(),
         )
         db.query_append_params(
-            query, RB.RhythmDBQueryType.EQUALS,
-            RB.RhythmDBPropType.GENRE, 'google-play-music-playlist',
+            query,
+            RB.RhythmDBQueryType.EQUALS,
+            RB.RhythmDBPropType.GENRE,
+            "google-play-music-playlist",
         )
         db.do_full_query_parsed(query_model, query)
         self.browser.set_model(query_model, False)
@@ -344,20 +358,21 @@ class GooglePlayPlaylist(GooglePlayBaseSource):
         db = shell.props.db
         for track in future.result():
             match = next(
-                (td for td in self.trackdata if td['id'] == track['trackId']),
-                None
-                )
+                (td for td in self.trackdata if td["id"] == track["trackId"]),
+                None,
+            )
             if match:
                 entry = self.create_entry_from_track_data(
-                    getattr(self, 'id', '0'), 'id', match
-                    )
+                    getattr(self, "id", "0"), "id", match
+                )
                 db.entry_set(
-                    entry, RB.RhythmDBPropType.GENRE,
-                    'google-play-music-playlist',
-                    )
+                    entry,
+                    RB.RhythmDBPropType.GENRE,
+                    "google-play-music-playlist",
+                )
                 self.props.base_query_model.add_entry(entry, -1)
         db.commit()
-        delattr(self, 'trackdata') #Memory concerns
+        delattr(self, "trackdata")  # Memory concerns
 
 
 GObject.type_register(GooglePlayLibrary)
