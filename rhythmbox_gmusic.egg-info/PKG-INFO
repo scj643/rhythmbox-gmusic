@@ -1,10 +1,10 @@
 Metadata-Version: 1.0
 Name: rhythmbox-gmusic
-Version: 4.0dev
+Version: 4.0
 Summary: Rhythmbox Google Play Music Plugin
-Home-page: https://github.com/nvbn/rhythmbox-gmusic/
-Author: Vladimir Iakovlev
-Author-email: nvbn.rm@gmail.com
+Home-page: https://github.com/jgoguen/rhythmbox-gmusic/
+Author: Joel Goguen
+Author-email: jgoguen@users.noreply.github.com
 License: BSD
 Description: UNKNOWN
 Platform: UNKNOWN
