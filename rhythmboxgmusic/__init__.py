@@ -108,7 +108,7 @@ class AuthDialog(Gtk.Dialog):
     def __init__(self):
         Gtk.Dialog.__init__(
             self,
-            _("Your Google account credentials"),
+            _("Your Google account credentials").decode("UTF-8"),
             None,
             0,
             (
@@ -118,13 +118,15 @@ class AuthDialog(Gtk.Dialog):
                 Gtk.ResponseType.OK,
             ),
         )
-        top_label = Gtk.Label(_("Please enter your Google account credentials"))
-        login_label = Gtk.Label(_("Login:"))
+        top_label = Gtk.Label(
+            _("Please enter your Google account credentials").decode("UTF-8")
+        )
+        login_label = Gtk.Label(_("Login:").decode("UTF-8"))
         self.login_input = Gtk.Entry()
         login_box = Gtk.HBox()
         login_box.add(login_label)
         login_box.add(self.login_input)
-        password_label = Gtk.Label(_("Password:"))
+        password_label = Gtk.Label(_("Password:").decode("UTF-8"))
         self.password_input = Gtk.Entry()
         self.password_input.set_visibility(False)
         password_box = Gtk.HBox()
@@ -171,10 +173,14 @@ class GooglePlayBaseSource(RB.Source):
             infobar = Gtk.InfoBar()
             self.top_box.pack_start(infobar, True, True, 0)
             infobar.set_message_type(Gtk.MessageType.INFO)
-            auth_btn = infobar.add_button(_("Click here to login"), 1)
+            auth_btn = infobar.add_button(
+                _("Click here to login").decode("UTF-8"), 1
+            )
             auth_btn.connect("clicked", self.auth)
             label = Gtk.Label(
-                _("This plugin requires you to authenticate to Google Play")
+                _(
+                    "This plugin requires you to authenticate to Google Play"
+                ).decode("UTF-8")
             )
             infobar.get_content_area().add(label)
         self.browser = RB.LibraryBrowser.new(shell.props.db, gentry)
