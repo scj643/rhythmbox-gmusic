@@ -3,5 +3,6 @@ syntax: glob
 *.pyc
 *pip-delete-this-directory.txt
 build/*
+dist/*
 .idea/*
 gmusicapi.log
