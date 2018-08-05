@@ -1,99 +1,24 @@
+# vim: syntax=python:ts=4:sts=4:expandtab:tw=80
+import gettext
+import GMusicAuth
+
 from gi import require_version
 
-require_version("GnomeKeyring", "1.0")
 require_version("Gtk", "3.0")
-require_version("Peas", "1.0")
 require_version("RB", "3.0")
 
+from concurrent import futures
+from gettext import lgettext as _
 from gi.repository import Gio
 from gi.repository import GLib
-from gi.repository import GnomeKeyring
 from gi.repository import GObject
 from gi.repository import Gtk
-from gi.repository import Peas
 from gi.repository import RB
-
-from concurrent import futures
-from gmusicapi import Mobileclient as Mapi
-from gettext import lgettext as _
-import gettext
-import json
 
 gettext.bindtextdomain("rhythmbox-gmusic", "/usr/share/locale")
 gettext.textdomain("rhythmbox-gmusic")
 
-APP_KEY = "rhythmbox-gmusic"
-result, KEYRING = GnomeKeyring.get_default_keyring_sync()
-GnomeKeyring.unlock_sync(KEYRING, None)
-
-mapi = Mapi(False)
 executor = futures.ThreadPoolExecutor(max_workers=1)
-
-
-def get_playlist_songs(id):
-    try:
-        # Mobile API can't get a single playlist's contents
-        playlists = mapi.get_all_user_playlist_contents()
-        for playlist in playlists:
-            if playlist["id"] == id:
-                return playlist["tracks"]
-    except KeyError:
-        return []
-
-
-def get_credentials():
-    attrs = GnomeKeyring.Attribute.list_new()
-    GnomeKeyring.Attribute.list_append_string(attrs, "id", APP_KEY)
-    result, value = GnomeKeyring.find_items_sync(
-        GnomeKeyring.ItemType.GENERIC_SECRET, attrs
-    )
-    if result == GnomeKeyring.Result.OK:
-        return json.loads(value[0].secret)
-    else:
-        return "", ""
-
-
-def set_credentials(username, password):
-    if KEYRING is not None:
-        GnomeKeyring.create_sync(KEYRING, None)
-    attrs = GnomeKeyring.Attribute.list_new()
-    GnomeKeyring.Attribute.list_append_string(attrs, "id", APP_KEY)
-    GnomeKeyring.item_create_sync(
-        KEYRING,
-        GnomeKeyring.ItemType.GENERIC_SECRET,
-        APP_KEY,
-        attrs,
-        json.dumps([username, password]),
-        True,
-    )
-
-
-class GooglePlayMusic(GObject.Object, Peas.Activatable):
-    __gtype_name = "GooglePlayMusicPlugin"
-    object = GObject.property(type=GObject.GObject)
-
-    def __init__(self):
-        GObject.Object.__init__(self)
-
-    def do_activate(self):
-        shell = self.object
-        db = shell.props.db
-        model = RB.RhythmDBQueryModel.new_empty(db)
-        self.source = GObject.new(
-            GooglePlayLibrary,
-            shell=shell,
-            name="Google Play Music",
-            query_model=model,
-            plugin=self,
-            icon=Gio.ThemedIcon.new("media-playback-start-symbolic"),
-        )
-        self.source.setup()
-        group = RB.DisplayPageGroup.get_by_id("library")
-        shell.append_display_page(self.source, group)
-
-    def do_deactivate(self):
-        self.source.delete_thyself()
-        self.source = None
 
 
 class GEntry(RB.RhythmDBEntryType):
@@ -102,50 +27,13 @@ class GEntry(RB.RhythmDBEntryType):
 
     def do_get_playback_uri(self, entry):
         id = entry.dup_string(RB.RhythmDBPropType.LOCATION).split("/")[1]
-        return mapi.get_stream_url(id)
+        return GMusicAuth.session.get_stream_url(id)
 
     def do_can_sync_metadata(self, entry):
         return True
 
 
 gentry = GEntry()
-
-
-class AuthDialog(Gtk.Dialog):
-    def __init__(self):
-        Gtk.Dialog.__init__(
-            self,
-            _("Your Google account credentials").decode("UTF-8"),
-            None,
-            0,
-            (
-                Gtk.STOCK_CANCEL,
-                Gtk.ResponseType.CANCEL,
-                Gtk.STOCK_OK,
-                Gtk.ResponseType.OK,
-            ),
-        )
-        top_label = Gtk.Label(
-            _("Please enter your Google account credentials").decode("UTF-8")
-        )
-        login_label = Gtk.Label(_("Login:").decode("UTF-8"))
-        self.login_input = Gtk.Entry()
-        login_box = Gtk.HBox()
-        login_box.add(login_label)
-        login_box.add(self.login_input)
-        password_label = Gtk.Label(_("Password:").decode("UTF-8"))
-        self.password_input = Gtk.Entry()
-        self.password_input.set_visibility(False)
-        password_box = Gtk.HBox()
-        password_box.add(password_label)
-        password_box.add(self.password_input)
-        vbox = Gtk.VBox()
-        vbox.add(top_label)
-        vbox.add(login_box)
-        vbox.add(password_box)
-        box = self.get_content_area()
-        box.add(vbox)
-        self.show_all()
 
 
 class GooglePlayBaseSource(RB.Source):
@@ -174,7 +62,7 @@ class GooglePlayBaseSource(RB.Source):
         )
         self.vbox = Gtk.Paned.new(Gtk.Orientation.VERTICAL)
         self.top_box = Gtk.VBox()
-        if self.mapi_login():
+        if self.gmusic_login():
             self.init_authenticated()
         else:
             self.auth_needed_bar = Gtk.InfoBar()
@@ -240,20 +128,22 @@ class GooglePlayBaseSource(RB.Source):
             self.top_box.remove(self.auth_needed_bar)
         self.load_songs()
 
-    def mapi_login(self):
-        if mapi.is_authenticated():
+    def gmusic_login(self):
+        if GMusicAuth.session.is_authenticated():
             return True
-        login, password = get_credentials()
-        return mapi.login(login, password, Mapi.FROM_MAC_ADDRESS)
+        login, password = GMusicAuth.get_credentials()
+        return GMusicAuth.session.login(
+            login, password, "Mapi.FROM_MAC_ADDRESS"
+        )
 
     def auth(self, widget):
-        dialog = AuthDialog()
+        dialog = GMusicAuth.AuthDialog()
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             login = dialog.login_input.get_text()
             password = dialog.password_input.get_text()
-            set_credentials(login, password)
-            if self.mapi_login():
+            GMusicAuth.set_credentials(login, password)
+            if self.gmusic_login():
                 self.init_authenticated()
         dialog.destroy()
 
@@ -307,7 +197,7 @@ class GooglePlayBaseSource(RB.Source):
 class GooglePlayLibrary(GooglePlayBaseSource):
     def load_songs(self):
         shell = self.props.shell
-        self.trackdata = mapi.get_all_songs()
+        self.trackdata = GMusicAuth.session.get_all_songs()
         for song in self.trackdata:
             try:
                 entry = self.create_entry_from_track_data(
@@ -322,7 +212,7 @@ class GooglePlayLibrary(GooglePlayBaseSource):
     def load_playlists(self):
         shell = self.props.shell
         db = shell.props.db
-        self.playlists = mapi.get_all_playlists()
+        self.playlists = GMusicAuth.session.get_all_playlists()
         for playlist in self.playlists:
             model = RB.RhythmDBQueryModel.new_empty(db)
             pl = GObject.new(
@@ -388,4 +278,12 @@ class GooglePlayPlaylist(GooglePlayBaseSource):
         delattr(self, "trackdata")  # Memory concerns
 
 
-GObject.type_register(GooglePlayLibrary)
+def get_playlist_songs(id):
+    try:
+        # Mobile API can't get a single playlist's contents
+        playlists = GMusicAuth.session.get_all_user_playlist_contents()
+        for playlist in playlists:
+            if playlist["id"] == id:
+                return playlist["tracks"]
+    except KeyError:
+        return []
