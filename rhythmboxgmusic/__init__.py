@@ -1,6 +1,9 @@
 from gi import require_version
 
 require_version("GnomeKeyring", "1.0")
+require_version("Gtk", "3.0")
+require_version("Peas", "1.0")
+require_version("RB", "3.0")
 
 from gi.repository import Gio
 from gi.repository import GLib
@@ -174,10 +177,10 @@ class GooglePlayBaseSource(RB.Source):
         if self.mapi_login():
             self.init_authenticated()
         else:
-            infobar = Gtk.InfoBar()
-            self.top_box.pack_start(infobar, True, True, 0)
-            infobar.set_message_type(Gtk.MessageType.INFO)
-            auth_btn = infobar.add_button(
+            self.auth_needed_bar = Gtk.InfoBar()
+            self.top_box.pack_start(self.auth_needed_bar, True, True, 0)
+            self.auth_needed_bar.set_message_type(Gtk.MessageType.INFO)
+            auth_btn = self.auth_needed_bar.add_button(
                 _("Click here to login").decode("UTF-8"), 1
             )
             auth_btn.connect("clicked", self.auth)
@@ -186,7 +189,7 @@ class GooglePlayBaseSource(RB.Source):
                     "This plugin requires you to authenticate to Google Play"
                 ).decode("UTF-8")
             )
-            infobar.get_content_area().add(label)
+            self.auth_needed_bar.get_content_area().add(label)
         self.browser = RB.LibraryBrowser.new(shell.props.db, gentry)
         self.browser.set_model(self.props.base_query_model, False)
         self.browser.connect("notify::output-model", self.update_view)
@@ -234,7 +237,7 @@ class GooglePlayBaseSource(RB.Source):
 
     def init_authenticated(self):
         if hasattr(self, "auth_box"):
-            self.top_box.remove(self.auth_box)
+            self.top_box.remove(self.auth_needed_bar)
         self.load_songs()
 
     def mapi_login(self):
