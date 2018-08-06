@@ -15,6 +15,9 @@ from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import RB
 
+from typing import Dict
+from typing import List
+
 gettext.bindtextdomain("rhythmbox-gmusic", "/usr/share/locale")
 gettext.textdomain("rhythmbox-gmusic")
 
@@ -22,14 +25,14 @@ executor = futures.ThreadPoolExecutor(max_workers=1)
 
 
 class GEntry(RB.RhythmDBEntryType):
-    def __init__(self):
+    def __init__(self) -> None:
         RB.RhythmDBEntryType.__init__(self)
 
-    def do_get_playback_uri(self, entry):
+    def do_get_playback_uri(self, entry) -> str:
         id = entry.dup_string(RB.RhythmDBPropType.LOCATION).split("/")[1]
         return GMusicAuth.session.get_stream_url(id)
 
-    def do_can_sync_metadata(self, entry):
+    def do_can_sync_metadata(self, entry) -> bool:
         return True
 
 
@@ -37,7 +40,7 @@ gentry = GEntry()
 
 
 class GooglePlayBaseSource(RB.Source):
-    def setup(self):
+    def setup(self) -> None:
         shell = self.props.shell
         self.songs_view = RB.EntryView.new(
             db=shell.props.db,
@@ -99,7 +102,7 @@ class GooglePlayBaseSource(RB.Source):
         self.pack_start(self.vbox, True, True, 0)
         self.show_all()
 
-    def on_search(self, entry, text):
+    def on_search(self, entry, text: str) -> None:
         db = self.props.shell.props.db
         query_model = RB.RhythmDBQueryModel.new_empty(db)
         query = GLib.PtrArray()
@@ -119,16 +122,16 @@ class GooglePlayBaseSource(RB.Source):
         self.browser.set_model(query_model, False)
         self.update_view()
 
-    def update_view(self, *args):
+    def update_view(self, *args) -> None:
         self.songs_view.set_model(self.browser.props.output_model)
         self.props.query_model = self.browser.props.output_model
 
-    def init_authenticated(self):
+    def init_authenticated(self) -> None:
         if hasattr(self, "auth_box"):
             self.top_box.remove(self.auth_needed_bar)
         self.load_songs()
 
-    def gmusic_login(self):
+    def gmusic_login(self) -> bool:
         if GMusicAuth.session.is_authenticated():
             return True
         login, password = GMusicAuth.get_credentials()
@@ -136,7 +139,7 @@ class GooglePlayBaseSource(RB.Source):
             login, password, "Mapi.FROM_MAC_ADDRESS"
         )
 
-    def auth(self, widget):
+    def auth(self, widget) -> None:
         dialog = GMusicAuth.AuthDialog()
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
@@ -147,10 +150,12 @@ class GooglePlayBaseSource(RB.Source):
                 self.init_authenticated()
         dialog.destroy()
 
-    def do_impl_get_entry_view(self):
+    def do_impl_get_entry_view(self) -> RB.EntryView:
         return self.songs_view
 
-    def create_entry_from_track_data(self, src_id, id_key, track):
+    def create_entry_from_track_data(
+        self, src_id: str, id_key: str, track: Dict[str, str]
+    ) -> RB.RhythmDBEntry:
         shell = self.props.shell
         db = shell.props.db
         entry = RB.RhythmDBEntry.new(db, gentry, src_id + "/" + track[id_key])
@@ -195,7 +200,7 @@ class GooglePlayBaseSource(RB.Source):
 
 
 class GooglePlayLibrary(GooglePlayBaseSource):
-    def load_songs(self):
+    def load_songs(self) -> None:
         shell = self.props.shell
         self.trackdata = GMusicAuth.session.get_all_songs()
         for song in self.trackdata:
@@ -209,7 +214,7 @@ class GooglePlayLibrary(GooglePlayBaseSource):
         shell.props.db.commit()
         self.load_playlists()
 
-    def load_playlists(self):
+    def load_playlists(self) -> None:
         shell = self.props.shell
         db = shell.props.db
         self.playlists = GMusicAuth.session.get_all_playlists()
@@ -227,16 +232,16 @@ class GooglePlayLibrary(GooglePlayBaseSource):
 
 
 class GooglePlayPlaylist(GooglePlayBaseSource):
-    def setup(self, id, trackdata):
+    def setup(self, id: str, trackdata: Dict[str, str]):
         self.id = id
         self.trackdata = trackdata
         GooglePlayBaseSource.setup(self)
 
-    def load_songs(self):
+    def load_songs(self) -> None:
         future = executor.submit(get_playlist_songs, self.id)
         future.add_done_callback(self.init_songs)
 
-    def on_search(self, entry, text):
+    def on_search(self, entry, text: str) -> None:
         db = self.props.shell.props.db
         query_model = RB.RhythmDBQueryModel.new_empty(db)
         query = GLib.PtrArray()
@@ -256,7 +261,7 @@ class GooglePlayPlaylist(GooglePlayBaseSource):
         self.browser.set_model(query_model, False)
         self.update_view()
 
-    def init_songs(self, future):
+    def init_songs(self, future) -> None:
         shell = self.props.shell
         db = shell.props.db
         for track in future.result():
@@ -278,7 +283,7 @@ class GooglePlayPlaylist(GooglePlayBaseSource):
         delattr(self, "trackdata")  # Memory concerns
 
 
-def get_playlist_songs(id):
+def get_playlist_songs(id: str) -> List[str]:
     try:
         # Mobile API can't get a single playlist's contents
         playlists = GMusicAuth.session.get_all_user_playlist_contents()

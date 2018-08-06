@@ -19,7 +19,7 @@ class GooglePlayMusic(GObject.Object, Peas.Activatable):
     def __init__(self):
         GObject.Object.__init__(self)
 
-    def do_activate(self):
+    def do_activate(self) -> None:
         shell = self.object
         db = shell.props.db
         model = RB.RhythmDBQueryModel.new_empty(db)
@@ -35,7 +35,7 @@ class GooglePlayMusic(GObject.Object, Peas.Activatable):
         group = RB.DisplayPageGroup.get_by_id("library")
         shell.append_display_page(self.source, group)
 
-    def do_deactivate(self):
+    def do_deactivate(self) -> None:
         self.source.delete_thyself()
         self.source = None
 

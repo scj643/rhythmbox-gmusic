@@ -8,10 +8,11 @@ require_version("GnomeKeyring", "1.0")
 require_version("Gtk", "3.0")
 
 from gettext import lgettext as _
-from gi.repository import Gio
 from gi.repository import GnomeKeyring
 from gi.repository import Gtk
 from gmusicapi import Mobileclient
+
+from typing import List
 
 gettext.bindtextdomain("rhythmbox-gmusic", "/usr/share/locale")
 gettext.textdomain("rhythmbox-gmusic")
@@ -22,7 +23,7 @@ GnomeKeyring.unlock_sync(KEYRING, None)
 session = Mobileclient(False)
 
 
-def get_credentials():
+def get_credentials() -> List[str]:
     attrs = GnomeKeyring.Attribute.list_new()
     GnomeKeyring.Attribute.list_append_string(attrs, "id", APP_KEY)
     result, value = GnomeKeyring.find_items_sync(
@@ -31,10 +32,10 @@ def get_credentials():
     if result == GnomeKeyring.Result.OK:
         return json.loads(value[0].secret)
     else:
-        return "", ""
+        return ["", ""]
 
 
-def set_credentials(username, password):
+def set_credentials(username: str, password: str) -> None:
     if KEYRING is not None:
         GnomeKeyring.create_sync(KEYRING, None)
     attrs = GnomeKeyring.Attribute.list_new()
@@ -50,7 +51,7 @@ def set_credentials(username, password):
 
 
 class AuthDialog(Gtk.Dialog):
-    def __init__(self):
+    def __init__(self) -> None:
         Gtk.Dialog.__init__(
             self,
             _("Your Google account credentials").decode("UTF-8"),
