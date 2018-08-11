@@ -10,6 +10,12 @@ Plugin for playing music from Google Play Music in Rhythmbox 3.x.
 * Secret storage implementing the [Secret Service DBus API](https://specifications.freedesktop.org/secret-service/)
 	* Tested only with `gnome-keyring`
 
+You must have previously logged in to Google Play Music on an Android device.
+If you don't have an Android device, you can use Google's official Android
+emulator (bundled as part of
+[Android Studio](https://developer.android.com/studio/)) to log in to
+Google Play Music.
+
 ## Installation
 
 First install package dependencies.
