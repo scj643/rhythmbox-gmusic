@@ -30,7 +30,6 @@ endef
 install:
 	install -d -m 0755 "$(RHYTHMBOX_BASE)/plugins/$(MODNAME)"
 	$(foreach f,$(shell find rhythmboxgmusic -type f -not -wholename '*/__pycache__/*'),$(call execute,install -m 0644 "$(f)" "$(RHYTHMBOX_BASE)/plugins/$(f)"))
-	install -m 0644 rhythmbox-gmusic-prefs.ui "$(DESTDIR)$(PREFIX)/share/rhythmbox/plugins/$(MODNAME)/rhythmbox-gmusic-prefs.ui"
 	install -m 0644 $(MODNAME).plugin "$(RHYTHMBOX_BASE)/plugins/$(MODNAME)/$(MODNAME).plugin"
 	python3 -m compileall "$(RHYTHMBOX_BASE)/plugins/$(MODNAME)"
 	$(foreach l,$(shell find po/ -mindepth 1 -maxdepth 1 -type d | xargs basename),$(call execute,install -D -m 0644 "po/$(l)/rhythmbox-gmusic.po" "$(DESTDIR)$(PREFIX)/share/locale/$(l)/rhythmbox-gmusic.po"))
