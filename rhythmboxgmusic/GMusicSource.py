@@ -1,6 +1,8 @@
 # vim: syntax=python:ts=4:sts=4:expandtab:tw=80
 import gettext
+import gmusicapi
 import GMusicAuth
+import re
 
 from gi import require_version
 
@@ -65,7 +67,12 @@ class GooglePlayBaseSource(RB.Source):
         )
         self.vbox = Gtk.Paned.new(Gtk.Orientation.VERTICAL)
         self.top_box = Gtk.VBox()
-        if self.gmusic_login():
+        is_authed = False
+        try:
+            is_authed = GMusicAuth.gmusic_login()
+        except:
+            pass
+        if is_authed:
             self.init_authenticated()
         else:
             self.auth_needed_bar = Gtk.InfoBar()
@@ -127,28 +134,53 @@ class GooglePlayBaseSource(RB.Source):
         self.props.query_model = self.browser.props.output_model
 
     def init_authenticated(self) -> None:
-        if hasattr(self, "auth_box"):
+        if hasattr(self, "auth_needed_bar"):
             self.top_box.remove(self.auth_needed_bar)
         self.load_songs()
 
-    def gmusic_login(self) -> bool:
-        if GMusicAuth.session.is_authenticated():
-            return True
-        login, password = GMusicAuth.get_credentials()
-        return GMusicAuth.session.login(
-            login, password, "Mapi.FROM_MAC_ADDRESS"
-        )
-
     def auth(self, widget) -> None:
-        dialog = GMusicAuth.AuthDialog()
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            login = dialog.login_input.get_text()
-            password = dialog.password_input.get_text()
-            GMusicAuth.set_credentials(login, password)
-            if self.gmusic_login():
-                self.init_authenticated()
-        dialog.destroy()
+        username, password = GMusicAuth.get_credentials()
+        if username is None or password is None:
+            dialog = GMusicAuth.AuthDialog()
+            response = dialog.run()
+            if response == Gtk.ResponseType.OK:
+                login = dialog.login_input.get_text()
+                password = dialog.password_input.get_text()
+                GMusicAuth.set_credentials(login, password)
+            dialog.destroy()
+
+        is_authed = False
+        try:
+            is_authed = GMusicAuth.gmusic_login()
+            GMusicAuth.session.logger.warning("is_authed")
+        except gmusicapi.exceptions.InvalidDeviceId as ex:
+            registred_device_ids = [
+                i for i in ex.valid_device_ids if re.match(r"^[0-9a-f]{16}$", i)
+            ]
+            if len(registred_device_ids) == 0:
+                GMusicAuth.session.logger.error("No valid registered devices!")
+                raise
+
+            if len(registred_device_ids) == 1:
+                GMusicAuth.save_device_id(registred_device_ids[0])
+                is_authed = GMusicAuth.gmusic_login()
+            else:
+                device_id_dialog = GMusicAuth.DeviceIdDialog(
+                    registred_device_ids
+                )
+                device_id_response = device_id_dialog.run()
+                if device_id_response == Gtk.ResponseType.OK:
+                    it = device_id_dialog.device_id.get_active_iter()
+                    if it is not None:
+                        device_id_model = device_id_dialog.device_id.get_model()
+                        GMusicAuth.session.logger.error(
+                            f"MODEL: {device_id_model[it]}"
+                        )
+                        GMusicAuth.save_device_id(device_id_model[it][0])
+                        is_authed = GMusicAuth.gmusic_login()
+                device_id_dialog.destroy()
+        if is_authed:
+            self.init_authenticated()
 
     def do_impl_get_entry_view(self) -> RB.EntryView:
         return self.songs_view
