@@ -2,6 +2,7 @@
 import gettext
 import gmusicapi
 import GMusicAuth
+import os
 import re
 
 from gi import require_version
@@ -16,6 +17,8 @@ from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import RB
+from urllib.request import urlopen
+from xdg import BaseDirectory
 
 from typing import Dict
 from typing import List
@@ -29,10 +32,39 @@ executor = futures.ThreadPoolExecutor(max_workers=1)
 class GEntry(RB.RhythmDBEntryType):
     def __init__(self) -> None:
         RB.RhythmDBEntryType.__init__(self)
+        self.cache_dir = os.path.join(
+            BaseDirectory.xdg_cache_home, GMusicAuth.APP_KEY, "music"
+        )
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir, mode=0o700, exist_ok=True)
 
     def do_get_playback_uri(self, entry) -> str:
         id = entry.dup_string(RB.RhythmDBPropType.LOCATION).split("/")[1]
-        return GMusicAuth.session.get_stream_url(id)
+        artist = entry.dup_string(RB.RhythmDBPropType.ARTIST)
+        album = entry.dup_string(RB.RhythmDBPropType.ALBUM)
+        title = entry.dup_string(RB.RhythmDBPropType.TITLE)
+        cache_file = os.path.join(self.cache_dir, artist, album, title)
+        if not os.path.isfile(cache_file):
+            # Try to download the song for local caching, fall back to the URL
+            url = GMusicAuth.session.get_stream_url(id)
+            try:
+                response = urlopen(url)
+                GMusicAuth.session.logger.warning(
+                    f"HTTP_CODE:{response.status}"
+                )
+                GMusicAuth.session.logger.warning(
+                    f"HTTP_HEADERS:{response.getheaders()}"
+                )
+                if not os.path.isdir(os.path.dirname(cache_file)):
+                    os.makedirs(
+                        os.path.dirname(cache_file), mode=0o700, exist_ok=True
+                    )
+                with open(cache_file, "bw") as f:
+                    f.write(response.read())
+            except Exception:
+                return url
+
+        return f"file://{cache_file}"
 
     def do_can_sync_metadata(self, entry) -> bool:
         return True
