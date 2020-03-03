@@ -1,7 +1,16 @@
 # vim: syntax=python:ts=4:sts=4:expandtab:tw=80
 import gettext
+import webbrowser
+
 import gmusicapi
-import GMusicAuth
+from oauth2client.client import OAuth2WebServerFlow
+
+try:
+    from . import GMusicAuth
+except ImportError:
+    # noinspection PyUnresolvedReferences
+    import GMusicAuth
+
 import os
 import re
 
@@ -171,14 +180,17 @@ class GooglePlayBaseSource(RB.Source):
         self.load_songs()
 
     def auth(self, widget) -> None:
-        username, password = GMusicAuth.get_credentials()
-        if username is None or password is None:
+        device_id, oauth = GMusicAuth.get_credentials()
+        if oauth is None:
+            flow = OAuth2WebServerFlow(**GMusicAuth.SessionMobileClient.oauth._asdict())
+            auth_uri = flow.step1_get_authorize_url()
+            webbrowser.open(auth_uri)
             dialog = GMusicAuth.AuthDialog()
             response = dialog.run()
             if response == Gtk.ResponseType.OK:
-                login = dialog.login_input.get_text()
-                password = dialog.password_input.get_text()
-                GMusicAuth.set_credentials(login, password)
+                oauth_text = dialog.password_input.get_text()
+                credentials = flow.step2_exchange(oauth_text)
+                GMusicAuth.set_credentials(credentials)
             dialog.destroy()
 
         is_authed = False
@@ -218,7 +230,7 @@ class GooglePlayBaseSource(RB.Source):
         return self.songs_view
 
     def create_entry_from_track_data(
-        self, src_id: str, id_key: str, track: Dict[str, str]
+            self, src_id: str, id_key: str, track: Dict[str, str]
     ) -> RB.RhythmDBEntry:
         shell = self.props.shell
         db = shell.props.db

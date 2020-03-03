@@ -2,6 +2,7 @@
 import gettext
 import json
 import os
+from oauth2client.client import OAuth2Credentials
 
 from gi import require_version
 
@@ -13,9 +14,10 @@ from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Secret
 from gmusicapi import Mobileclient
+from gmusicapi.session import Mobileclient as SessionMobileClient
 from xdg import BaseDirectory
 
-from typing import List
+from typing import List, Optional
 
 APP_KEY = "rhythmbox-gmusic"
 
@@ -25,51 +27,49 @@ gettext.textdomain(APP_KEY)
 SCHEMA = Secret.Schema.new(
     "rhythmbox.gmusic.credentials",
     Secret.SchemaFlags.NONE,
-    {"id": Secret.SchemaAttributeType.STRING},
+    {"id": Secret.SchemaAttributeType.STRING,
+     "kind": Secret.SchemaAttributeType.STRING},
 )
+# We are using kind since we want to store auth data and device id in the keychain
 attrs = {"id": APP_KEY}
 session = Mobileclient(False)
-device_id_file = os.path.join(
-    BaseDirectory.xdg_config_home, APP_KEY, "device_id"
-)
 
 
-def get_credentials() -> List[str]:
+def get_credentials():
+    """
+    Get stored device id and oauth credentials
+    :return:
+    """
     try:
-        credential = Secret.password_lookup_sync(SCHEMA, attrs, None)
-        if credential is not None:
-            return json.loads(credential)
+        device_id = Secret.password_lookup_sync(SCHEMA, {"kind": "device", **attrs}, None)
+        oauth = Secret.password_lookup_sync(SCHEMA, {"kind": "oauth", **attrs}, None)
+        if oauth is not None:
+            if device_id is None:
+                device_id = '""'
+
+            return device_id, OAuth2Credentials.from_json(oauth)
     except GLib.Error:
         session.logger.exception("Failed to retrieve secret from the keyring")
-        return [None, None]
+        return None, None
     session.logger.warning("No credential found in the keying")
-    return [None, None]
+    return None, None
 
 
-def set_credentials(username: str, password: str) -> None:
+def set_credentials(oauth_token: OAuth2Credentials) -> None:
     Secret.password_store_sync(
         SCHEMA,
-        attrs,
+        {"kind": "oauth", **attrs},
         Secret.COLLECTION_DEFAULT,
         APP_KEY,
-        json.dumps([username, password]),
+        oauth_token.to_json(),
         None,
     )
 
 
-def get_device_id() -> str:
-    if not os.path.isfile(device_id_file):
-        return None
-    with open(device_id_file) as f:
-        return f.read().strip()
-
-
 def save_device_id(device_id: str) -> None:
-    if not os.path.exists(device_id_file):
-        os.makedirs(os.path.dirname(device_id_file), mode=0o700, exist_ok=True)
-
-    with open(device_id_file, "w") as f:
-        f.write(device_id.strip())
+    if not Secret.password_lookup_sync(SCHEMA, {"kind": "device", **attrs}, None):
+        Secret.password_store_sync(SCHEMA, {"kind": "device", **attrs}, Secret.COLLECTION_DEFAULT, APP_KEY, device_id,
+                                   None)
 
 
 def gmusic_login() -> bool:
@@ -77,16 +77,11 @@ def gmusic_login() -> bool:
         session.logger.warning("is_authenticated")
         return True
 
-    login, password = get_credentials()
-    if login is None or password is None:
+    device_id, oauth = get_credentials()
+    if oauth is None:
         return False
 
-    device_id = get_device_id()
-    if device_id is None or device_id == "":
-        # Force an exception, which is expected to be caught and dealt with
-        device_id = "0123456789abcdef"
-
-    return session.login(login, password, device_id)
+    return session.oauth_login(device_id, oauth)
 
 
 class AuthDialog(Gtk.Dialog):
@@ -104,14 +99,9 @@ class AuthDialog(Gtk.Dialog):
             ),
         )
         top_label = Gtk.Label(
-            _("Please enter your Google account credentials").decode("UTF-8")
+            _("Please enter your Google Auth token").decode("UTF-8")
         )
-        login_label = Gtk.Label(_("Login:").decode("UTF-8"))
-        self.login_input = Gtk.Entry()
-        login_box = Gtk.HBox()
-        login_box.add(login_label)
-        login_box.add(self.login_input)
-        password_label = Gtk.Label(_("Password:").decode("UTF-8"))
+        password_label = Gtk.Label(_("Oauth Token:").decode("UTF-8"))
         self.password_input = Gtk.Entry()
         self.password_input.set_visibility(False)
         password_box = Gtk.HBox()
@@ -119,7 +109,6 @@ class AuthDialog(Gtk.Dialog):
         password_box.add(self.password_input)
         vbox = Gtk.VBox()
         vbox.add(top_label)
-        vbox.add(login_box)
         vbox.add(password_box)
         box = self.get_content_area()
         box.add(vbox)
